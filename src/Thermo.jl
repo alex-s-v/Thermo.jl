@@ -1,5 +1,14 @@
 module Thermo
 
-# package code goes here
+__precompile__()
 
-end # module
+export EquilibriumData, Component, Mixture
+export SRK, PR, RK, VdW
+export pressure, temperature, liquid, vapor
+export CriticalPoint, EquilibriumPoint
+export solve, dump_json
+
+include("equations.jl")
+include("equilibrium.jl")
+
+end
