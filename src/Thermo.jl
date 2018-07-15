@@ -8,7 +8,7 @@ export pressure, temperature, liquid, vapor
 export CriticalPoint, EquilibriumPoint
 export solve, dump_json
 
-include("equations.jl")
+# include("equations.jl")
 include("equilibrium.jl")
 
 end
