@@ -6,7 +6,7 @@ export EquilibriumData, Component, Mixture
 export SRK, PR, RK, VdW
 export pressure, temperature, liquid, vapor
 export CriticalPoint, EquilibriumPoint
-export solve, dump_json
+export solve, dump_json, solve_multiple
 
 # include("equations.jl")
 include("equilibrium.jl")

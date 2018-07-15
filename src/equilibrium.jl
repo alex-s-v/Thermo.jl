@@ -230,6 +230,18 @@ function predict!(cp::CriticalPoint)
     return eds
 end
 
+function solve_multiple(cps::Array{CriticalPoint, 1})
+    function app(a::Array{Array{EquilibriumData, 1}, 1},
+                b::Array{Array{EquilibriumData, 1}, 1})
+        append!(a, b)
+        return a
+    end
+    edss = @parallel app for cp ∈ cps
+        [solve(cp)]
+    end
+    return edss
+end
+
 ################################################################################
 ## PostProcessing Functions
 ################################################################################
