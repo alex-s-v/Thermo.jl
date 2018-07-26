@@ -1,5 +1,6 @@
 
 using JSON
+using Optim
 
 include("equations.jl")
 
@@ -100,7 +101,6 @@ Solves an equation of state and returns an equilibrium point for the given
 properties.
 """
 function solve(ep::EquilibriumPoint, T::Float64, P::Float64)
-
     incr = ep.incr
     ed = predict!(ep, T, P)
     ep.incr = incr
@@ -128,7 +128,7 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
         val = T
     end
     Rval = val
-
+    n_iter = 0
     while true
         ed = slv(val)
         ep.incr < ep.incr_min && return nothing
@@ -143,9 +143,13 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
             if ep.phase == vapor
                 s = adj_s(update_x!(ep, ed))
                 val /= s
+                n_iter += 1
+                if n_iter > 1000 ep.tol *= 2 end
             else
                 s = adj_s(update_y!(ep, ed))
                 val *= s
+                n_iter += 1
+                if n_iter > 1000 ep.tol *= 2 end
             end
         end
     end
@@ -186,7 +190,7 @@ end
 """
     solve(cp::CriticalPoint)
 
-Solves an equation of state and returns an an array of equilibrium points, where
+Solves an equation of state and returns an array of equilibrium points, where
 last of them a critical, for the given properties.
 """
 function solve(cp::CriticalPoint)
@@ -231,15 +235,46 @@ function predict!(cp::CriticalPoint)
 end
 
 function solve_multiple(cps::Array{CriticalPoint, 1})
+    cps_c = deepcopy(cps)
     function app(a::Array{Array{EquilibriumData, 1}, 1},
                 b::Array{Array{EquilibriumData, 1}, 1})
         append!(a, b)
         return a
     end
-    edss = @parallel app for cp ∈ cps
+    edss = @parallel app for cp ∈ cps_c
         [solve(cp)]
     end
     return edss
+end
+
+function fit(cps::Array{CriticalPoint, 1},
+             k_bounds::Tuple{Float64,Float64}=(-2.0,2.0); Tcr_exp=nothing,
+             Pcr_exp=nothing, Vcr_exp=nothing, w=[1.0,1.0,1.0],
+             optim_eq=nothing, opt_set...)
+
+    prms = [p for p ∈ [Tcr_exp, Pcr_exp, Vcr_exp] if p != nothing]
+    if length(prms) == 0
+        error("You have to specify at least one of the critical parametes.")
+    end
+    function to_opt(k::Float64)
+        for cp ∈ cps
+            cp.ep.eq.mix.k = [0.0 k; k 0.0]
+        end
+        edss = solve_multiple(cps)
+        Tcr_calc::Array{Float64, 1} = [x[end].T for x ∈ edss]
+        Pcr_calc::Array{Float64, 1} = [x[end].P for x ∈ edss]
+        Vcr_calc::Array{Float64, 1} = [x[end].Vl for x ∈ edss]
+        s::Float64 = 0.0
+        for (i, (e, c)) ∈ enumerate(zip([Tcr_exp, Pcr_exp, Vcr_exp],
+                                      [Tcr_calc, Pcr_calc, Vcr_calc]))
+            if e != nothing
+                s += sum(w[i] * ((e - c) ./ e).^2)
+            end
+        end
+        return s
+    end
+    return optimize(to_opt, k_bounds[1], k_bounds[2]; show_trace=true,
+                    opt_set...)
 end
 
 ################################################################################
