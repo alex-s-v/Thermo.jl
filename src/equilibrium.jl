@@ -7,7 +7,7 @@ include("equations.jl")
 """
 The parameter, which needs to be predicted.
 """
-@enum Predict temperature pressure
+@enum Predict TEMPERATURE PRESSURE
 
 """
     EquilibriumPoint(eq, predict, phase; max_P=nothing, max_T=nothing,
@@ -36,7 +36,7 @@ type EquilibriumPoint
         max_P == nothing && (max_P = max(eq.mix.Pcr...) * 1.1)
         max_T == nothing && (max_T = max(eq.mix.Pcr...) * 1.3)
         tol == nothing && (tol = 0.001)
-        if predict == pressure
+        if predict == PRESSURE
             incr == nothing && (incr = 101325.0)
             incr_min == nothing && (incr_min = 100.0)
             incr_den == nothing && (incr_den = 100.0)
@@ -73,7 +73,7 @@ type CriticalPoint
                            corr_coef=nothing)
         T == nothing && (T = sum(ep.eq.mix.Tb .* ep.eq.mix.x))
         P == nothing && (P = 101325.0)
-        if ep.predict == pressure
+        if ep.predict == PRESSURE
             incr == nothing && (incr = 10.0)
             incr_min == nothing && (incr_min = 0.05)
             incr_den == nothing && (incr_den = 2.0)
@@ -116,7 +116,7 @@ properties. But it chenges the increment.
 function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
 
     s = 0
-    if ep.predict == pressure
+    if ep.predict == PRESSURE
         crit = ep.max_P
         slv = (x) -> solve(ep.eq, T, x)
         adj_s = (x) -> x
@@ -140,7 +140,7 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
             end
             val += ep.incr
         else
-            if ep.phase == vapor
+            if ep.phase == VAPOR
                 s = adj_s(update_x!(ep, ed))
                 val /= s
                 n_iter += 1
@@ -207,7 +207,7 @@ properties.
 function predict!(cp::CriticalPoint)
 
     eds::Array{EquilibriumData, 1}, ed = [], 1
-    if cp.ep.predict == pressure
+    if cp.ep.predict == PRESSURE
         upd1! = (cp::CriticalPoint) -> cp.T -= cp.incr
         upd2! = (cp::CriticalPoint) -> cp.T += cp.incr
         upd3! = (cp::CriticalPoint) -> cp.P *= cp.corr_coef
@@ -234,23 +234,35 @@ function predict!(cp::CriticalPoint)
     return eds
 end
 
-function solve_multiple(cps::Array{CriticalPoint, 1})
-    cps_c = deepcopy(cps)
+"""
+    solve(cps::Array{CriticalPoint, 1})
+
+Solves multiple critical points in parallel (if multiple threads is defined).
+"""
+function solve(cps::Array{CriticalPoint, 1})
     function app(a::Array{Array{EquilibriumData, 1}, 1},
                 b::Array{Array{EquilibriumData, 1}, 1})
         append!(a, b)
         return a
     end
-    edss = @parallel app for cp ∈ cps_c
+    edss = @parallel app for cp ∈ cps
         [solve(cp)]
     end
     return edss
 end
 
+"""
+    fit(cps::Array{CriticalPoint, 1},
+        k_bounds::Tuple{Float64,Float64}=(-1.0,1.0); Tcr_exp=nothing,
+        Pcr_exp=nothing, Vcr_exp=nothing, w=[1.0,1.0,1.0], opt_set...)
+
+Optimizes binary interaction parameter for given experimental critical data.
+You may provide additional arguments to the optimization function (from Optim
+using package) using keyword arguments.
+"""
 function fit(cps::Array{CriticalPoint, 1},
-             k_bounds::Tuple{Float64,Float64}=(-2.0,2.0); Tcr_exp=nothing,
-             Pcr_exp=nothing, Vcr_exp=nothing, w=[1.0,1.0,1.0],
-             optim_eq=nothing, opt_set...)
+             k_bounds::Tuple{Float64,Float64}=(-1.0,1.0); Tcr_exp=nothing,
+             Pcr_exp=nothing, Vcr_exp=nothing, w=[1.0,1.0,1.0], opt_set...)
 
     prms = [p for p ∈ [Tcr_exp, Pcr_exp, Vcr_exp] if p != nothing]
     if length(prms) == 0
@@ -260,7 +272,7 @@ function fit(cps::Array{CriticalPoint, 1},
         for cp ∈ cps
             cp.ep.eq.mix.k = [0.0 k; k 0.0]
         end
-        edss = solve_multiple(cps)
+        edss = solve(cps)
         Tcr_calc::Array{Float64, 1} = [x[end].T for x ∈ edss]
         Pcr_calc::Array{Float64, 1} = [x[end].P for x ∈ edss]
         Vcr_calc::Array{Float64, 1} = [x[end].Vl for x ∈ edss]

@@ -9,7 +9,7 @@ const R = 8.3144598
 """
 The phase which determines a computational algorithm.
 """
-@enum Phase liquid vapor
+@enum Phase LIQUID VAPOR
 
 """
     EquilibriumData(T::Float64, P::Float64, x::Float64, y::Float64, Vv::Float64,
@@ -181,7 +181,7 @@ function calc_params end
 function calc_params(eq::Union{SRK,PR}, T::Float64, P::Float64,
                      phase::Phase)
 
-    frac = phase == liquid ? eq.mix.x : eq.mix.y
+    frac = phase == LIQUID ? eq.mix.x : eq.mix.y
 
     ᾱ = (1 + eq.m̄ .* (1 - sqrt.(T ./ eq.mix.Tcr))).^2
     ā = (eq.Ωa * eq.mix.RTcr² ./ eq.mix.Pcr) .* ᾱ
@@ -204,7 +204,7 @@ end
 
 function calc_params(eq::RK, T::Float64, P::Float64, phase::Phase)
 
-    frac = phase == liquid ? eq.mix.x : eq.mix.y
+    frac = phase == LIQUID ? eq.mix.x : eq.mix.y
 
     ā = eq.Ωa * eq.mix.RTcr²⁵ ./ eq.mix.Pcr
     b̄ = eq.Ωb * eq.mix.RTcr ./ eq.mix.Pcr
@@ -220,7 +220,7 @@ end
 
 function calc_params(eq::VdW, T::Float64, P::Float64, phase::Phase)
 
-    frac = phase == liquid ? eq.mix.x : eq.mix.y
+    frac = phase == LIQUID ? eq.mix.x : eq.mix.y
 
     Ā = eq.Ωa * eq.mix.RTcr² ./ eq.mix.Pcr
     B̄ = eq.Ωb * eq.mix.RTcr ./ eq.mix.Pcr
@@ -258,7 +258,7 @@ function calc_fugacity_coef(eq::Equation, T::Float64, P::Float64, phase::Phase)
     if zs == nothing
         return nothing
     end
-    Z::Float64 = phase == liquid ? min(zs...) : max(zs...)
+    Z::Float64 = phase == LIQUID ? min(zs...) : max(zs...)
     V::Float64 = Z * RT / P
 
     if eq_type == SRK
@@ -295,8 +295,8 @@ Solves the equation of state and returns thermodynamic data for given point.
 """
 function solve(eq::Equation, T::Float64, P::Float64)
 
-    v = calc_fugacity_coef(eq, T, P, vapor)
-    l = calc_fugacity_coef(eq, T, P, liquid)
+    v = calc_fugacity_coef(eq, T, P, VAPOR)
+    l = calc_fugacity_coef(eq, T, P, LIQUID)
 
     if v == nothing || l == nothing
         return nothing
