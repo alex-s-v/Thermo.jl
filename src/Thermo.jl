@@ -4,9 +4,9 @@ __precompile__()
 
 export EquilibriumData, Component, Mixture
 export SRK, PR, RK, VdW, Equation
-export pressure, temperature, liquid, vapor
+export PRESSURE, TEMPERATURE, LIQUID, VAPOR
 export CriticalPoint, EquilibriumPoint
-export solve, dump_json, solve_multiple, fit
+export solve, dump_json, fit
 
 # include("equations.jl")
 include("equilibrium.jl")
