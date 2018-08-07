@@ -261,7 +261,7 @@ You may provide additional arguments to the optimization function (from Optim
 using package) using keyword arguments.
 """
 function fit(cps::Array{CriticalPoint, 1},
-             k_bounds::Tuple{Float64,Float64}=(-1.0,1.0); Tcr_exp=nothing,
+             k_bounds::Tuple{Float64,Float64}=(-0.1,0.1); Tcr_exp=nothing,
              Pcr_exp=nothing, Vcr_exp=nothing, w=[1.0,1.0,1.0], opt_set...)
 
     prms = [p for p ∈ [Tcr_exp, Pcr_exp, Vcr_exp] if p != nothing]
