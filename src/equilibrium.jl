@@ -309,7 +309,8 @@ function dump_json(eds::Array{EquilibriumData, 1}, filename::AbstractString)
 end
 
 """
-    dump_json(eds::Array{EquilibriumData, 1}, filename::AbstractString)
+    dump_json(edss::Array{Array{EquilibriumData, 1}, 1},
+                   filename::AbstractString)
 
 Saves the given array of arrays of equilibrium points in json format.
 The main use is for saving the product of multiple critical point valuations.
