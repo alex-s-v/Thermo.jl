@@ -34,7 +34,7 @@ type EquilibriumPoint
                               incr_den=nothing)
 
         max_P == nothing && (max_P = max(eq.mix.Pcr...) * 1.1)
-        max_T == nothing && (max_T = max(eq.mix.Pcr...) * 1.3)
+        max_T == nothing && (max_T = max(eq.mix.Tcr...) * 1.3)
         tol == nothing && (tol = 0.001)
         if predict == PRESSURE
             incr == nothing && (incr = 101325.0)
@@ -76,12 +76,12 @@ type CriticalPoint
         if ep.predict == PRESSURE
             incr == nothing && (incr = 10.0)
             incr_min == nothing && (incr_min = 0.05)
-            incr_den == nothing && (incr_den = 2.0)
+            incr_den == nothing && (incr_den = 14.14)
             corr_coef == nothing && (corr_coef = 0.9)
         else
-            incr == nothing && (incr = 101325.0)
-            incr_min == nothing && (incr_min = 100.0)
-            incr_den == nothing && (incr_den = 100.0)
+            incr == nothing && (incr = 202650.0)
+            incr_min == nothing && (incr_min = 3000.0)
+            incr_den == nothing && (incr_den = 8.21)
             corr_coef == nothing && (corr_coef = 0.99)
         end
 
@@ -93,6 +93,23 @@ end
 ################################################################################
 ## Equilibrium Point
 ################################################################################
+
+"""
+    solve(ep::EquilibriumPoint, T::Float64, P::Float64)
+
+Solves an equation of state and returns an equilibrium points for the given
+properties.
+"""
+function solve(eps_::Array{EquilibriumPoint, 1}, T::Float64, P::Float64)
+	function app(a::Array{EquilibriumData, 1}, b::Array{EquilibriumData, 1})
+        append!(a, b)
+        return a
+    end
+    eds = @parallel app for ep ∈ eps_
+        [solve(ep, T, P)]
+    end
+    return eds
+end
 
 """
     solve(ep::EquilibriumPoint, T::Float64, P::Float64)
@@ -132,7 +149,6 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
     while true
         ed = slv(val)
         ep.incr < ep.incr_min && return nothing
-        abs(1 - s) < ep.tol && return ed
         if ed == nothing
             if val > crit
                 ep.incr /= ep.incr_den
@@ -142,16 +158,17 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
         else
             if ep.phase == VAPOR
                 s = adj_s(update_x!(ep, ed))
-                val /= s
-                n_iter += 1
+                val /= s                
+				n_iter += 1
                 if n_iter > 1000 ep.tol *= 2 end
             else
                 s = adj_s(update_y!(ep, ed))
-                val *= s
-                n_iter += 1
+                val *= s               
+				n_iter += 1
                 if n_iter > 1000 ep.tol *= 2 end
             end
         end
+		abs(1 - s) < ep.tol && return ed
     end
 end
 

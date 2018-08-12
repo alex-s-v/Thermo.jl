@@ -282,7 +282,9 @@ function calc_fugacity_coef(eq::Equation, T::Float64, P::Float64, phase::Phase)
         h3 = -2 * sqrt.(Ā * A) / (RT * V)
         h4 = e
     end
-
+    #@show [h1, h2, h3, h4]
+	#@show P
+	#@show T
     ϕ::Array{Float64, 1} = exp.(h1 - log(h2) + h3 * log(h4))
 
     return (ϕ, V)
