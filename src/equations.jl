@@ -32,7 +32,7 @@ end
     Mixture(name::AbstractString, x::Array{Float64, 1},
             y::Array{Float64, 1}, Tb::Array{Float64, 1},
             Tcr::Array{Float64, 1}, Pcr::Array{Float64, 1},
-            ω::Array{Float64, 1}, k::Array{Float64, 1} = [])
+            ω::Array{Float64, 1}, k::Array{Float64, 2} = [])
 
 Construct an instance of a mixture from the data about its individual
 components (Where `ω` is a Pitzer acentric factors and `k` is a Binary interaction
