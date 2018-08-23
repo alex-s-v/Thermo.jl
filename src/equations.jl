@@ -4,7 +4,7 @@ using Polynomials: Poly, roots
 """
 The Universal gas constant.
 """
-const R = 8.3144598
+const R = 8.3144598484848485
 
 """
 The phase which determines a computational algorithm.
@@ -17,7 +17,7 @@ The phase which determines a computational algorithm.
 
 Contains the data about an equilibrium point.
 """
-struct EquilibriumData
+type EquilibriumData
     T::Float64
     P::Float64
     x::Array{Float64, 1}
@@ -71,7 +71,8 @@ type Mixture
             l = length(x)
             k = zeros((l, l))
         end
-        return new(name, x, y, Tb, Tcr, Pcr, ω, k, RTcr, RTcr², RTcr²⁵)
+        return new(name, x, y, copy(Tb), copy(Tcr), copy(Pcr), copy(ω), copy(k),
+                   RTcr, RTcr², RTcr²⁵)
     end
 end
 
@@ -282,9 +283,6 @@ function calc_fugacity_coef(eq::Equation, T::Float64, P::Float64, phase::Phase)
         h3 = -2 * sqrt.(Ā * A) / (RT * V)
         h4 = e
     end
-    #@show [h1, h2, h3, h4]
-	#@show P
-	#@show T
     ϕ::Array{Float64, 1} = exp.(h1 - log(h2) + h3 * log(h4))
 
     return (ϕ, V)

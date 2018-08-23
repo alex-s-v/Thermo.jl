@@ -38,8 +38,8 @@ type EquilibriumPoint
         tol == nothing && (tol = 0.001)
         if predict == PRESSURE
             incr == nothing && (incr = 101325.0)
-            incr_min == nothing && (incr_min = 100.0)
-            incr_den == nothing && (incr_den = 100.0)
+            incr_min == nothing && (incr_min = 500.0)
+            incr_den == nothing && (incr_den = 200.0)
         else
             incr == nothing && (incr = 10.0)
             incr_min == nothing && (incr_min = 0.05)
@@ -124,6 +124,102 @@ function solve(ep::EquilibriumPoint, T::Float64, P::Float64)
     return ed
 end
 
+######################
+## TEST VERSION
+######################
+
+function solve2(ep::EquilibriumPoint, T::Float64, P::Float64)
+    x = copy(ep.eq.mix.x)
+    y = copy(ep.eq.mix.y)
+    ed = predict2!(ep, T, P)
+    ep.eq.mix.x = x
+    ep.eq.mix.y = y
+    return ed
+end
+
+function find_computable(ep::EquilibriumPoint, T::Float64, P::Float64, crit::Float64, slv, val::Float64)
+    
+    incr = ep.incr
+    incr_den = ep.incr_den
+    incr_min = ep.incr_min
+    Rval = val
+    while incr > incr_min
+        ed = slv(val)
+        if ed == nothing
+            if val > crit
+                incr /= incr_den
+                val = Rval
+            end
+            val += incr
+        else
+            return ed, val
+        end
+    end
+    return nothing, 0
+    
+end
+
+function predict2!(ep::EquilibriumPoint, T::Float64, P::Float64)
+
+    if ep.predict == PRESSURE
+        crit = ep.max_P
+        slv = (x) -> solve(ep.eq, T, x)
+        adj_s = (x) -> x
+        val = P
+    else
+        crit = ep.max_T
+        slv = (x) -> solve(ep.eq, x, P)
+        adj_s = (x) -> 1.1 - x / 10.0
+        val = T
+    end
+    
+    ed, val = find_computable(ep, T, P, crit, slv, val)
+    if ed == nothing return nothing end
+    is_vapor = ep.phase == VAPOR
+    rmf = is_vapor ? rmfV : rmfL
+    p_val = val
+    s = 0
+    ns = 0
+    while abs(1 - s) > ep.tol
+        ed = slv(val)
+        if ed == nothing
+            x = ns - 1
+            if abs(x) < 1e-5 return nothing end
+            ns = 1 + x/2.5
+            val = is_vapor ? p_val/ns : p_val*ns
+        else
+            p_val = val
+            s = adj_s(rmf(ep, ed))
+            ns = s
+            val = is_vapor ? val/s : val*s
+        end
+    end
+    return ed
+    
+end
+
+function rmfV(ep, ed)
+    k = ed.ϕv ./ ed.ϕl
+    kmf = k .* ed.y
+    s = sum(kmf)
+    nx = kmf/s
+    ed.x = nx
+    return s
+end
+
+function rmfL(ep, ed)
+    k = ed.ϕl ./ ed.ϕv
+    kmf = k .* ed.x
+    s = sum(kmf)
+    ny = kmf/s
+    ed.y = ny
+    return s 
+end
+
+######################
+## TEST VERSION
+######################
+
 """
     predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
 
@@ -144,10 +240,11 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
         adj_s = (x) -> 1.1 - x / 10.0
         val = T
     end
+    x::Array{Float64, 1} = copy(ep.eq.mix.x)
+    y::Array{Float64, 1} = copy(ep.eq.mix.y)
     Rval = val
     while true
         ed = slv(val)
-        ep.incr < ep.incr_min && return nothing
         if ed == nothing
             if val > crit
                 ep.incr /= ep.incr_den
@@ -163,7 +260,8 @@ function predict!(ep::EquilibriumPoint, T::Float64, P::Float64)
                 val *= s
             end
         end
-		abs(1 - s) < ep.tol && return ed
+        ep.incr < ep.incr_min && return nothing
+		if abs(1 - s) < ep.tol return ed end
     end
 end
 
@@ -198,6 +296,61 @@ end
 ################################################################################
 ## Critical Point
 ################################################################################
+
+#########################
+## TEST VERSION
+#########################
+
+function solve2(cps::Array{CriticalPoint, 1})
+    function app(a::Array{Array{EquilibriumData, 1}, 1},
+                b::Array{Array{EquilibriumData, 1}, 1})
+        append!(a, b)
+        return a
+    end
+    edss = @parallel app for cp ∈ cps
+        [solve2(cp)]
+    end
+    return edss
+end
+
+function solve2(cp::CriticalPoint)
+    return predict2!(deepcopy(cp))
+end
+
+function predict2!(cp::CriticalPoint)
+    
+    eds::Array{EquilibriumData, 1}, ed = [], 1
+    if cp.ep.predict == PRESSURE
+        upd1! = (cp::CriticalPoint) -> cp.T -= cp.incr
+        upd2! = (cp::CriticalPoint) -> cp.T += cp.incr
+        upd3! = (cp::CriticalPoint) -> cp.P *= cp.corr_coef
+    else
+        upd1! = (cp::CriticalPoint) -> cp.P -= cp.incr
+        upd2! = (cp::CriticalPoint) -> cp.P += cp.incr
+        upd3! = (cp::CriticalPoint) -> cp.T *= cp.corr_coef
+    end
+
+    while ed != nothing
+        ed = solve2(cp.ep, cp.T, cp.P)
+        if ed != nothing
+            println("T: $(ed.T), P: $(ed.P), X: $(cp.ep.eq.mix.x[1])")
+            cp.T, cp.P = ed.T, ed.P
+            push!(eds, ed)
+            upd3!(cp)
+        elseif cp.incr / cp.incr_den > cp.incr_min
+            ed = 1
+            upd1!(cp)
+            cp.incr /= cp.incr_den
+        end
+        upd2!(cp)
+    end
+
+    return eds
+end
+
+#########################
+## TEST VERSION
+#########################
 
 """
     solve(cp::CriticalPoint)
@@ -300,6 +453,43 @@ function fit(cps::Array{CriticalPoint, 1},
     return optimize(to_opt, k_bounds[1], k_bounds[2]; show_trace=true,
                     opt_set...)
 end
+
+#########################
+## TEST VERSION
+#########################
+
+function fit2(cps::Array{CriticalPoint, 1},
+             k_bounds::Tuple{Float64,Float64}=(-0.2,0.2); Tcr_exp=nothing,
+             Pcr_exp=nothing, Vcr_exp=nothing, w=[1.0,1.0,1.0], opt_set...)
+
+    prms = [p for p ∈ [Tcr_exp, Pcr_exp, Vcr_exp] if p != nothing]
+    if length(prms) == 0
+        error("You have to specify at least one of the critical parametes.")
+    end
+    function to_opt(k::Float64)
+        for cp ∈ cps
+            cp.ep.eq.mix.k = [0.0 k; k 0.0]
+        end
+        edss = solve2(cps)
+        Tcr_calc::Array{Float64, 1} = [x[end].T for x ∈ edss]
+        Pcr_calc::Array{Float64, 1} = [x[end].P for x ∈ edss]
+        Vcr_calc::Array{Float64, 1} = [x[end].Vl for x ∈ edss]
+        s::Float64 = 0.0
+        for (i, (e, c)) ∈ enumerate(zip([Tcr_exp, Pcr_exp, Vcr_exp],
+                                      [Tcr_calc, Pcr_calc, Vcr_calc]))
+            if e != nothing
+                s += sum(w[i] * ((e - c) ./ e).^2)
+            end
+        end
+        return s
+    end
+    return optimize(to_opt, k_bounds[1], k_bounds[2]; show_trace=true,
+                    opt_set...)
+end
+
+#########################
+## TEST VERSION
+#########################
 
 ################################################################################
 ## PostProcessing Functions
